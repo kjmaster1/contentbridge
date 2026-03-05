@@ -105,43 +105,54 @@ class TwitchPlatform(BasePlatform):
         )
 
     def get_content(self, access_token: str, platform_user_id: str) -> list[PlatformContent]:
-        with httpx.Client() as client:
-            response = client.get(
-                f"{self.API_BASE}/videos",
-                params={
-                    "user_id": platform_user_id,
-                    "first": 20,
-                    "type": "archive",
-                },
-                headers=self._get_headers(access_token)
-            )
-            response.raise_for_status()
-            data = response.json()
-
         content = []
-        for video in data.get("data", []):
-            published_at = None
-            if video.get("created_at"):
-                published_at = datetime.fromisoformat(
-                    video["created_at"].replace("Z", "+00:00")
+        cursor = None
+
+        with httpx.Client() as client:
+            while True:
+                params = {
+                    "user_id": platform_user_id,
+                    "first": 100,  # Max allowed by Twitch
+                    "type": "archive",
+                }
+                if cursor:
+                    params["after"] = cursor
+
+                response = client.get(
+                    f"{self.API_BASE}/videos",
+                    params=params,
+                    headers=self._get_headers(access_token)
                 )
+                response.raise_for_status()
+                data = response.json()
 
-            duration_seconds = self._parse_duration(video.get("duration", "0s"))
+                for video in data.get("data", []):
+                    published_at = None
+                    if video.get("created_at"):
+                        published_at = datetime.fromisoformat(
+                            video["created_at"].replace("Z", "+00:00")
+                        )
+                    duration_seconds = self._parse_duration(video.get("duration", "0s"))
 
-            content.append(PlatformContent(
-                platform_content_id=video["id"],
-                content_type="stream",
-                title=video["title"],
-                description=video.get("description"),
-                thumbnail_url=video.get("thumbnail_url", "").replace(
-                    "%{width}", "320").replace("%{height}", "180"),
-                url=video.get("url"),
-                duration_seconds=duration_seconds,
-                published_at=published_at,
-                view_count=video.get("view_count", 0),
-                like_count=0,
-                comment_count=0,
-            ))
+                    content.append(PlatformContent(
+                        platform_content_id=video["id"],
+                        content_type="stream",
+                        title=video["title"],
+                        description=video.get("description"),
+                        thumbnail_url=video.get("thumbnail_url", "").replace("%{width}", "320").replace("%{height}",
+                                                                                                        "180"),
+                        url=video.get("url"),
+                        duration_seconds=duration_seconds,
+                        published_at=published_at,
+                        view_count=video.get("view_count", 0),
+                        like_count=0,
+                        comment_count=0,
+                    ))
+
+                # Check if there is another page
+                cursor = data.get("pagination", {}).get("cursor")
+                if not cursor:
+                    break
 
         return content
 

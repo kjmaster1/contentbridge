@@ -105,76 +105,83 @@ class YouTubePlatform(BasePlatform):
             )
             channel_response.raise_for_status()
             channel_data = channel_response.json()
-
             if not channel_data.get("items"):
                 return []
 
-            uploads_playlist_id = (
-                channel_data["items"][0]["contentDetails"]
-                ["relatedPlaylists"]["uploads"]
-            )
+            uploads_playlist_id = channel_data["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
 
-            # Get videos from uploads playlist
-            playlist_response = client.get(
-                f"{self.API_BASE}/playlistItems",
-                params={
+            # Loop through pages to get ALL video IDs
+            video_ids = []
+            page_token = None
+
+            while True:
+                params = {
                     "part": "contentDetails",
                     "playlistId": uploads_playlist_id,
                     "maxResults": 50,
-                },
-                headers={"Authorization": f"Bearer {access_token}"}
-            )
-            playlist_response.raise_for_status()
-            playlist_data = playlist_response.json()
+                }
+                if page_token:
+                    params["pageToken"] = page_token
 
-            video_ids = [
-                item["contentDetails"]["videoId"]
-                for item in playlist_data.get("items", [])
-            ]
+                playlist_response = client.get(
+                    f"{self.API_BASE}/playlistItems",
+                    params=params,
+                    headers={"Authorization": f"Bearer {access_token}"}
+                )
+                playlist_response.raise_for_status()
+                playlist_data = playlist_response.json()
+
+                for item in playlist_data.get("items", []):
+                    video_ids.append(item["contentDetails"]["videoId"])
+
+                page_token = playlist_data.get("nextPageToken")
+                if not page_token:
+                    break  # No more pages left!
 
             if not video_ids:
                 return []
 
-            # Get full video details
-            videos_response = client.get(
-                f"{self.API_BASE}/videos",
-                params={
-                    "part": "snippet,statistics,contentDetails",
-                    "id": ",".join(video_ids),
-                },
-                headers={"Authorization": f"Bearer {access_token}"}
-            )
-            videos_response.raise_for_status()
-            videos_data = videos_response.json()
-
-        content = []
-        for video in videos_data.get("items", []):
-            snippet = video["snippet"]
-            stats = video.get("statistics", {})
-            duration = video.get("contentDetails", {}).get("duration", "PT0S")
-
-            duration_seconds = self._parse_duration(duration)
-            content_type = "short" if duration_seconds <= 60 else "video"
-
-            published_at = None
-            if snippet.get("publishedAt"):
-                published_at = datetime.fromisoformat(
-                    snippet["publishedAt"].replace("Z", "+00:00")
+            # Fetch full video details in chunks of 50 (YouTube API limit per request)
+            content = []
+            for i in range(0, len(video_ids), 50):
+                chunk = video_ids[i:i + 50]
+                videos_response = client.get(
+                    f"{self.API_BASE}/videos",
+                    params={
+                        "part": "snippet,statistics,contentDetails",
+                        "id": ",".join(chunk),
+                    },
+                    headers={"Authorization": f"Bearer {access_token}"}
                 )
+                videos_response.raise_for_status()
+                videos_data = videos_response.json()
 
-            content.append(PlatformContent(
-                platform_content_id=video["id"],
-                content_type=content_type,
-                title=snippet["title"],
-                description=snippet.get("description"),
-                thumbnail_url=snippet.get("thumbnails", {}).get("medium", {}).get("url"),
-                url=f"https://youtube.com/watch?v={video['id']}",
-                duration_seconds=duration_seconds,
-                published_at=published_at,
-                view_count=int(stats.get("viewCount", 0)),
-                like_count=int(stats.get("likeCount", 0)),
-                comment_count=int(stats.get("commentCount", 0)),
-            ))
+                for video in videos_data.get("items", []):
+                    snippet = video["snippet"]
+                    stats = video.get("statistics", {})
+                    duration = video.get("contentDetails", {}).get("duration", "PT0S")
+                    duration_seconds = self._parse_duration(duration)
+                    content_type = "short" if duration_seconds <= 60 else "video"
+
+                    published_at = None
+                    if snippet.get("publishedAt"):
+                        published_at = datetime.fromisoformat(
+                            snippet["publishedAt"].replace("Z", "+00:00")
+                        )
+
+                    content.append(PlatformContent(
+                        platform_content_id=video["id"],
+                        content_type=content_type,
+                        title=snippet["title"],
+                        description=snippet.get("description"),
+                        thumbnail_url=snippet.get("thumbnails", {}).get("medium", {}).get("url"),
+                        url=f"https://youtube.com/watch?v={video['id']}",
+                        duration_seconds=duration_seconds,
+                        published_at=published_at,
+                        view_count=int(stats.get("viewCount", 0)),
+                        like_count=int(stats.get("likeCount", 0)),
+                        comment_count=int(stats.get("commentCount", 0)),
+                    ))
 
         return content
 
