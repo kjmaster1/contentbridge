@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.DS_Store
+*.db
+alembic/versions/__pycache__/
+celerybeat-schedule
