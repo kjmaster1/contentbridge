@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
         };
 
-        fetchMe();
+        void fetchMe();
     }, [token]);
 
     const login = (newToken: string, creatorData: Creator) => {
