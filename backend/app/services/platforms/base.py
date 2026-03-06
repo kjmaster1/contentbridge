@@ -36,21 +36,21 @@ class BasePlatform(ABC):
         pass
 
     @abstractmethod
-    def exchange_code(self, code: str) -> dict:
+    async def exchange_code(self, code: str) -> dict:
         pass
 
     @abstractmethod
-    def refresh_tokens(self, refresh_token: str) -> dict:
+    async def refresh_tokens(self, refresh_token: str) -> dict:
         pass
 
     @abstractmethod
-    def get_profile(self, access_token: str) -> PlatformProfile:
+    async def get_profile(self, access_token: str) -> PlatformProfile:
         pass
 
     @abstractmethod
-    def get_stats(self, access_token: str, platform_user_id: str) -> PlatformStats:
+    async def get_stats(self, access_token: str, platform_user_id: str) -> PlatformStats:
         pass
 
     @abstractmethod
-    def get_content(self, access_token: str, platform_user_id: str) -> list[PlatformContent]:
+    async def get_content(self, access_token: str, platform_user_id: str) -> list[PlatformContent]:
         pass

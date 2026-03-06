@@ -39,13 +39,16 @@ async def redis_listener():
     async for message in pubsub.listen():
         logger.info(f"Redis message received: {message}")
         if message["type"] == "pmessage":
+            creator_id = "unknown"
             try:
                 channel = message["channel"].decode()
                 creator_id = channel.split(":")[1]
                 data = json.loads(message["data"])
                 await manager.send_to_creator(creator_id, data)
+            except json.JSONDecodeError as e:  # ADDED: Catch bad JSON
+                logger.error(f"Redis JSON decode error for creator {creator_id}: {e}")
             except Exception as e:
-                logger.error(f"Redis listener error: {e}")
+                logger.error(f"Redis listener unexpected error: {e}")
 
 app = FastAPI(
     title="ContentBridge API",

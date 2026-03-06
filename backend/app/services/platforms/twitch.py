@@ -25,9 +25,9 @@ class TwitchPlatform(BasePlatform):
         query = "&".join(f"{k}={v}" for k, v in params.items())
         return f"{self.AUTH_URL}?{query}"
 
-    def exchange_code(self, code: str) -> dict:
-        with httpx.Client() as client:
-            response = client.post(self.TOKEN_URL, data={
+    async def exchange_code(self, code: str) -> dict:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(self.TOKEN_URL, data={
                 "client_id": settings.twitch_client_id,
                 "client_secret": settings.twitch_client_secret,
                 "code": code,
@@ -37,9 +37,9 @@ class TwitchPlatform(BasePlatform):
             response.raise_for_status()
             return response.json()
 
-    def refresh_tokens(self, refresh_token: str) -> dict:
-        with httpx.Client() as client:
-            response = client.post(self.TOKEN_URL, data={
+    async def refresh_tokens(self, refresh_token: str) -> dict:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(self.TOKEN_URL, data={
                 "client_id": settings.twitch_client_id,
                 "client_secret": settings.twitch_client_secret,
                 "refresh_token": refresh_token,
@@ -54,9 +54,9 @@ class TwitchPlatform(BasePlatform):
             "Client-Id": settings.twitch_client_id,
         }
 
-    def get_profile(self, access_token: str) -> PlatformProfile:
-        with httpx.Client() as client:
-            response = client.get(
+    async def get_profile(self, access_token: str) -> PlatformProfile:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
                 f"{self.API_BASE}/users",
                 headers=self._get_headers(access_token)
             )
@@ -74,10 +74,10 @@ class TwitchPlatform(BasePlatform):
             platform_thumbnail_url=user.get("profile_image_url"),
         )
 
-    def get_stats(self, access_token: str, platform_user_id: str) -> PlatformStats:
-        with httpx.Client() as client:
+    async def get_stats(self, access_token: str, platform_user_id: str) -> PlatformStats:
+        async with httpx.AsyncClient() as client:
             # Get follower count
-            followers_response = client.get(
+            followers_response = await client.get(
                 f"{self.API_BASE}/channels/followers",
                 params={"broadcaster_id": platform_user_id},
                 headers=self._get_headers(access_token)
@@ -86,7 +86,7 @@ class TwitchPlatform(BasePlatform):
             followers_data = followers_response.json()
 
             # Get videos count
-            videos_response = client.get(
+            videos_response = await client.get(
                 f"{self.API_BASE}/videos",
                 params={"user_id": platform_user_id, "first": 1},
                 headers=self._get_headers(access_token)
@@ -104,12 +104,14 @@ class TwitchPlatform(BasePlatform):
             total_content=total_content,
         )
 
-    def get_content(self, access_token: str, platform_user_id: str) -> list[PlatformContent]:
+    async def get_content(self, access_token: str, platform_user_id: str) -> list[PlatformContent]:
         content = []
         cursor = None
+        page_count = 0
+        max_pages = 10
 
-        with httpx.Client() as client:
-            while True:
+        async with httpx.AsyncClient() as client:
+            while page_count < max_pages:
                 params = {
                     "user_id": platform_user_id,
                     "first": 100,  # Max allowed by Twitch
@@ -118,7 +120,7 @@ class TwitchPlatform(BasePlatform):
                 if cursor:
                     params["after"] = cursor
 
-                response = client.get(
+                response = await client.get(
                     f"{self.API_BASE}/videos",
                     params=params,
                     headers=self._get_headers(access_token)
@@ -151,6 +153,7 @@ class TwitchPlatform(BasePlatform):
 
                 # Check if there is another page
                 cursor = data.get("pagination", {}).get("cursor")
+                page_count += 1
                 if not cursor:
                     break
 

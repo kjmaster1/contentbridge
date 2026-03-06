@@ -29,9 +29,9 @@ class YouTubePlatform(BasePlatform):
         query = "&".join(f"{k}={v}" for k, v in params.items())
         return f"{self.AUTH_URL}?{query}"
 
-    def exchange_code(self, code: str) -> dict:
-        with httpx.Client() as client:
-            response = client.post(self.TOKEN_URL, data={
+    async def exchange_code(self, code: str) -> dict:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(self.TOKEN_URL, data={
                 "client_id": settings.google_client_id,
                 "client_secret": settings.google_client_secret,
                 "code": code,
@@ -41,9 +41,9 @@ class YouTubePlatform(BasePlatform):
             response.raise_for_status()
             return response.json()
 
-    def refresh_tokens(self, refresh_token: str) -> dict:
-        with httpx.Client() as client:
-            response = client.post(self.TOKEN_URL, data={
+    async def refresh_tokens(self, refresh_token: str) -> dict:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(self.TOKEN_URL, data={
                 "client_id": settings.google_client_id,
                 "client_secret": settings.google_client_secret,
                 "refresh_token": refresh_token,
@@ -52,9 +52,9 @@ class YouTubePlatform(BasePlatform):
             response.raise_for_status()
             return response.json()
 
-    def get_profile(self, access_token: str) -> PlatformProfile:
-        with httpx.Client() as client:
-            response = client.get(
+    async def get_profile(self, access_token: str) -> PlatformProfile:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
                 f"{self.API_BASE}/channels",
                 params={"part": "snippet,statistics", "mine": "true"},
                 headers={"Authorization": f"Bearer {access_token}"}
@@ -75,9 +75,9 @@ class YouTubePlatform(BasePlatform):
             platform_thumbnail_url=snippet.get("thumbnails", {}).get("default", {}).get("url"),
         )
 
-    def get_stats(self, access_token: str, platform_user_id: str) -> PlatformStats:
-        with httpx.Client() as client:
-            response = client.get(
+    async def get_stats(self, access_token: str, platform_user_id: str) -> PlatformStats:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
                 f"{self.API_BASE}/channels",
                 params={"part": "statistics", "id": platform_user_id},
                 headers={"Authorization": f"Bearer {access_token}"}
@@ -95,10 +95,10 @@ class YouTubePlatform(BasePlatform):
             total_content=int(stats.get("videoCount", 0)),
         )
 
-    def get_content(self, access_token: str, platform_user_id: str) -> list[PlatformContent]:
-        with httpx.Client() as client:
+    async def get_content(self, access_token: str, platform_user_id: str) -> list[PlatformContent]:
+        async with httpx.AsyncClient() as client:
             # Get uploads playlist ID
-            channel_response = client.get(
+            channel_response = await client.get(
                 f"{self.API_BASE}/channels",
                 params={"part": "contentDetails", "id": platform_user_id},
                 headers={"Authorization": f"Bearer {access_token}"}
@@ -113,8 +113,10 @@ class YouTubePlatform(BasePlatform):
             # Loop through pages to get ALL video IDs
             video_ids = []
             page_token = None
+            page_count = 0
+            max_pages = 10
 
-            while True:
+            while page_count < max_pages:
                 params = {
                     "part": "contentDetails",
                     "playlistId": uploads_playlist_id,
@@ -123,7 +125,7 @@ class YouTubePlatform(BasePlatform):
                 if page_token:
                     params["pageToken"] = page_token
 
-                playlist_response = client.get(
+                playlist_response = await client.get(
                     f"{self.API_BASE}/playlistItems",
                     params=params,
                     headers={"Authorization": f"Bearer {access_token}"}
@@ -135,6 +137,8 @@ class YouTubePlatform(BasePlatform):
                     video_ids.append(item["contentDetails"]["videoId"])
 
                 page_token = playlist_data.get("nextPageToken")
+                page_count += 1
+
                 if not page_token:
                     break  # No more pages left!
 

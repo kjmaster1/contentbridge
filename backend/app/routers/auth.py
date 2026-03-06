@@ -20,7 +20,7 @@ def connect_youtube(current_creator: Creator = Depends(get_current_creator)):
     return {"auth_url": auth_url}
 
 @router.get("/youtube/callback")
-def youtube_callback(code: str, state: str, db: Session = Depends(get_db)):
+async def youtube_callback(code: str, state: str, db: Session = Depends(get_db)):
     creator_id = state.split(":")[0]
     creator = db.query(Creator).filter(Creator.id == creator_id).first()
     if not creator:
@@ -29,12 +29,12 @@ def youtube_callback(code: str, state: str, db: Session = Depends(get_db)):
     platform = get_platform(PlatformType.youtube)
 
     try:
-        tokens = platform.exchange_code(code)
+        tokens = await platform.exchange_code(code)
         access_token = tokens["access_token"]
         refresh_token = tokens.get("refresh_token")
         expires_in = tokens.get("expires_in", 3600)
 
-        profile = platform.get_profile(access_token)
+        profile = await platform.get_profile(access_token)
 
         existing = db.query(PlatformConnection).filter(
             PlatformConnection.creator_id == creator_id,
@@ -79,7 +79,7 @@ def connect_twitch(current_creator: Creator = Depends(get_current_creator)):
     return {"auth_url": auth_url}
 
 @router.get("/twitch/callback")
-def twitch_callback(code: str, state: str, db: Session = Depends(get_db)):
+async def twitch_callback(code: str, state: str, db: Session = Depends(get_db)):
     creator_id = state.split(":")[0]
     creator = db.query(Creator).filter(Creator.id == creator_id).first()
     if not creator:
@@ -88,12 +88,12 @@ def twitch_callback(code: str, state: str, db: Session = Depends(get_db)):
     platform = get_platform(PlatformType.twitch)
 
     try:
-        tokens = platform.exchange_code(code)
+        tokens = await platform.exchange_code(code)
         access_token = tokens["access_token"]
         refresh_token = tokens.get("refresh_token")
         expires_in = tokens.get("expires_in", 3600)
 
-        profile = platform.get_profile(access_token)
+        profile = await platform.get_profile(access_token)
 
         existing = db.query(PlatformConnection).filter(
             PlatformConnection.creator_id == creator_id,

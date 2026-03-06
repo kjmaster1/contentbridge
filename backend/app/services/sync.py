@@ -21,7 +21,7 @@ def send_websocket_notification(creator_id: str, message: dict):
     except Exception as e:
         logger.error(f"Failed to publish WebSocket notification: {e}")
 
-def sync_platform_connection(connection_id: str):
+async def sync_platform_connection(connection_id: str):
     db = SessionLocal()
     try:
         connection = db.query(PlatformConnection).filter(
@@ -39,7 +39,7 @@ def sync_platform_connection(connection_id: str):
         if connection.token_expires_at and connection.token_expires_at < datetime.now(timezone.utc):
             if connection.refresh_token:
                 try:
-                    tokens = platform.refresh_tokens(connection.refresh_token)
+                    tokens = await platform.refresh_tokens(connection.refresh_token)
                     access_token = tokens["access_token"]
                     connection.access_token = access_token
                     if tokens.get("refresh_token"):
@@ -51,7 +51,7 @@ def sync_platform_connection(connection_id: str):
 
         # Sync channel stats
         try:
-            stats = platform.get_stats(access_token, connection.platform_user_id)
+            stats = await platform.get_stats(access_token, connection.platform_user_id)
             snapshot = AnalyticsSnapshot(
                 platform_connection_id=connection.id,
                 followers=stats.followers,
@@ -64,7 +64,7 @@ def sync_platform_connection(connection_id: str):
 
         # Sync content
         try:
-            content_items = platform.get_content(access_token, connection.platform_user_id)
+            content_items = await platform.get_content(access_token, connection.platform_user_id)
             for item in content_items:
                 existing = db.query(ContentItem).filter(
                     ContentItem.platform_content_id == item.platform_content_id,
@@ -137,7 +137,7 @@ def sync_platform_connection(connection_id: str):
     finally:
         db.close()
 
-def sync_all_connections_for_creator(creator_id: str):
+async def sync_all_connections_for_creator(creator_id: str):
     db = SessionLocal()
     try:
         connections = db.query(PlatformConnection).filter(
@@ -149,4 +149,4 @@ def sync_all_connections_for_creator(creator_id: str):
         db.close()
 
     for connection_id in connection_ids:
-        sync_platform_connection(connection_id)
+        await sync_platform_connection(connection_id)
